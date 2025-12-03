@@ -1,0 +1,69 @@
+name: Python CI/CD Pipeline
+
+# Коли запускати: при будь-якому пуші в будь-яку гілку
+on: [push]
+
+jobs:
+  # --- Job 1: LINT ---
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3 # Стандартний екшн для скачування коду
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Стандартний екшн для встановлення Python
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install flake8
+
+      - name: Run Lint
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # --- Job 2: TEST ---
+  test:
+    runs-on: ubuntu-latest
+    needs: lint # Вказуємо, що цей крок чекає завершення lint (імітація stage)
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install pytest
+        run: pip install pytest pytest-cov
+
+      - name: Run Tests with Coverage
+        # --cov-fail-under=50 перевіряє ліміт покриття (впаде, якщо <50%)
+        # --junitxml=report.xml створює звіт
+        run: pytest --cov=. --cov-fail-under=50 --junitxml=report.xml
+
+      - name: Upload Test Report (Artifact)
+        if: always() # Зберігати звіт навіть якщо тести впали
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-xml
+          path: report.xml
+
+  # --- Job 3: BUILD ---
+  build:
+    runs-on: ubuntu-latest
+    needs: test # Чекаємо завершення тестів
+    # УМОВА: Запускати тільки якщо це гілка main
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Application (Simulation)
+        run: |
+          mkdir build
+          cp app.py build/
+          echo "Build finished!"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-package
+          path: build/
